@@ -1,0 +1,35 @@
+{
+  "name": "hr-logistica",
+  "version": "2.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "setup": "node scripts/setup-env.mjs",
+    "db:up": "docker compose up -d --wait postgres",
+    "db:down": "docker compose stop postgres",
+    "db:migrate": "npm run migrate -w @hr/api",
+    "build:shared": "npm run build -w @hr/shared",
+    "dev": "npm run build:shared && concurrently -k -n shared,api,web -c gray,green,cyan \"npm run dev -w @hr/shared\" \"npm run dev -w @hr/api\" \"npm run dev -w @hr/web\"",
+    "build": "npm run build:shared && npm run build -w @hr/api && npm run build -w @hr/web",
+    "start": "concurrently -k -n api,web -c green,cyan \"npm run start -w @hr/api\" \"npm run start -w @hr/web\"",
+    "typecheck": "npm run build:shared && npm run typecheck -w @hr/api && npm run typecheck -w @hr/web",
+    "criar-admin": "npm run build:shared && npm run build -w @hr/api && npm run criar-admin -w @hr/api --",
+    "docker:up": "docker compose up -d --build --wait",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "migrate:new": "npm run migrate:new -w @hr/api --"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7",
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "effect": "3.22.5"
+  }
+}

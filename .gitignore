@@ -1,0 +1,11 @@
+node_modules/
+.next/
+dist/
+.env
+.env.*
+!.env.example
+.submissions/
+next-env.d.ts
+*.tsbuildinfo
+apps/api/src/generated/
+.data/

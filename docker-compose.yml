@@ -1,0 +1,80 @@
+name: hr-logistica
+
+x-api-image: &api-image
+  image: hr-logistica-api
+  build:
+    context: .
+    dockerfile: apps/api/Dockerfile
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hr
+      POSTGRES_DB: hr_portal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Rode "npm run setup" para criar o .env}
+    ports:
+      # acessível só nesta máquina; usado no desenvolvimento local
+      - "127.0.0.1:${POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hr -d hr_portal"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # aplica as migrações do banco e encerra
+  migrate:
+    <<: *api-image
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://hr:${POSTGRES_PASSWORD}@postgres:5432/hr_portal
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # sem "ports": a API só é alcançada pelo site, pela rede interna
+  api:
+    <<: *api-image
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://hr:${POSTGRES_PASSWORD}@postgres:5432/hr_portal
+      API_PORT: 3333
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Rode "npm run setup" para criar o .env}
+      CAPTCHA_SECRET: ${CAPTCHA_SECRET:?Rode "npm run setup" para criar o .env}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_TO_CONTATO: ${MAIL_TO_CONTATO:-comercial@hr.log.br}
+      MAIL_TO_COTACAO: ${MAIL_TO_COTACAO:-comercial@hr.log.br}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3333/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+
+  web:
+    image: hr-logistica-web
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      API_URL: http://api:3333
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

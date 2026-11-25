@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #0d9633;
+  --color-brand-deep: #0e752a;
+  --color-leaf: #8cc63f;
+  --color-ink: #1c1c1c;
+  --color-night: #06170c;
+  --color-forest: #0a2413;
+  --color-paper: #f4f7f1;
+}
+
+@theme inline {
+  --font-display: var(--font-barlow), ui-sans-serif, sans-serif;
+  --font-sans: var(--font-barlow), ui-sans-serif, sans-serif;
+}
+
+@layer base {
+  body { @apply bg-paper font-sans text-ink antialiased; overflow-x: clip; }
+  main { overflow-x: clip; }
+  ::selection { @apply bg-leaf text-night; }
+  :focus-visible { outline: 3px solid var(--color-leaf); outline-offset: 3px; }
+  h1, h2, h3 { @apply font-display; text-wrap: balance; }
+}
+
+@layer components {
+  .wrap { @apply mx-auto w-full max-w-7xl px-5 sm:px-8; }
+  .eyebrow { @apply inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.28em]; }
+  .eyebrow::before { content: ""; @apply h-px w-10 bg-current; }
+  .display { @apply font-display font-extrabold leading-[0.98] tracking-[-0.015em]; }
+  .grid-lines {
+    background-image:
+      linear-gradient(rgb(140 198 63 / 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(140 198 63 / 0.08) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+  .field {
+    @apply w-full rounded-2xl border border-ink/15 bg-white px-4 pb-2.5 pt-6 text-[15px] text-ink outline-none transition focus:border-brand focus:shadow-[0_0_0_4px_rgb(13_150_51/0.14)];
+  }
+  .field-label {
+    @apply pointer-events-none absolute left-4 top-2 text-[11px] font-bold uppercase tracking-wider text-ink/55 peer-focus:text-brand-deep;
+  }
+}
+
+/* Barra de rolagem: trilho na cor da noite e "pegador" em degradê verde */
+::-webkit-scrollbar { width: 14px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--color-night); }
+::-webkit-scrollbar-thumb {
+  min-height: 56px;
+  border: 3px solid var(--color-night);
+  border-radius: 999px;
+  background: linear-gradient(to bottom, var(--color-leaf), var(--color-brand) 55%, var(--color-brand-deep));
+}
+::-webkit-scrollbar-thumb:hover { border-width: 2px; }
+::-webkit-scrollbar-thumb:active { background: var(--color-leaf); }
+::-webkit-scrollbar-corner { background: var(--color-night); }
+
+/* barras internas (campos de texto, miniaturas, menu do celular): verde liso */
+body *::-webkit-scrollbar-track { background: transparent; }
+body *::-webkit-scrollbar-thumb { border-color: transparent; background: var(--color-brand) padding-box; }
+
+/* Firefox. Fica dentro do @supports porque, no Chrome, estas propriedades anulariam o estilo acima. */
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-color: var(--color-brand) var(--color-night); }
+}
+
+/* Portal e telas de acesso: cantos retos e blocos chapados, diferente das formas arredondadas do site */
+.portal { --radius-lg: 0.125rem; --radius-xl: 0.125rem; --radius-2xl: 0.125rem; --radius-3xl: 0.25rem; }
+.portal .btn-primary { border-radius: 0.125rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.portal .panel { border-top: 4px solid var(--color-brand); }
+.portal .panel h2 { text-transform: uppercase; }
+.portal .eyebrow::before { content: none; }
+
+/* campo apontado pelo aviso de preenchimento */
+input[data-invalid], textarea[data-invalid], select[data-invalid] { border-color: #dc2626 !important; box-shadow: 0 0 0 4px rgb(220 38 38 / 0.14) !important; }
+label:has(> input[type="file"][data-invalid]) { border-color: #dc2626 !important; }
+
+/* rede de segurança: a abertura some mesmo se o JavaScript falhar */
+.preloader { animation: preloader-failsafe 0s 5s forwards; }
+@keyframes preloader-failsafe { to { visibility: hidden; } }
+
+.road-dash { animation: dash 0.7s linear infinite; }
+@keyframes dash { to { stroke-dashoffset: -48; } }
+
+/* Google Tradutor: esconde a barra injetada */
+.goog-te-banner-frame, iframe.skiptranslate, #google_translate_element { display: none !important; }
+body { top: 0 !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-iteration-count: 1 !important; }
+  .road-dash { animation: none; }
+}
