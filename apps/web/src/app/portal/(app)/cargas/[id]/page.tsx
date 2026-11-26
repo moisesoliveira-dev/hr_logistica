@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { CargoDetail } from "@hr/shared";
+import type { CargoDetail, CargoOptions } from "@hr/shared";
 import { CargoEventForm, CargoForm, CargoHistory, DeleteCargo, ShareCode } from "@/components/portal/cargo";
 import { PageTitle } from "@/components/portal/ui";
 import { apiData, requireCargoManager } from "@/lib/auth/session";
@@ -15,7 +15,7 @@ export default async function CargoPage({ params, searchParams }: Props) {
   await requireCargoManager();
   const [{ id }, { nova }] = await Promise.all([params, searchParams]);
   if (!/^\d{1,9}$/.test(id)) notFound();
-  const cargo = await apiData<CargoDetail>(`/cargo/${id}`);
+  const [cargo, options] = await Promise.all([apiData<CargoDetail>(`/cargo/${id}`), apiData<CargoOptions>("/options/cargo")]);
   return (
     <>
       <PageTitle eyebrow={cargo.customerName} title={cargo.code} />
@@ -23,9 +23,9 @@ export default async function CargoPage({ params, searchParams }: Props) {
       {nova && <p role="status" className="mb-4 rounded-sm bg-leaf/30 p-4 font-bold">Carga cadastrada. Envie o código ao cliente.</p>}
       <div className="mb-6"><ShareCode code={cargo.code} /></div>
       <div className="space-y-6">
-        <CargoEventForm key={cargo.id} cargo={cargo} />
+        <CargoEventForm key={cargo.id} cargo={cargo} options={options} />
         <CargoHistory cargoId={cargo.id} events={cargo.events} />
-        <CargoForm cargo={cargo} />
+        <CargoForm cargo={cargo} options={options} />
         <DeleteCargo id={cargo.id} code={cargo.code} />
       </div>
     </>

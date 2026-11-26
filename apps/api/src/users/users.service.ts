@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { roles, sectors, type Credential, type Employee, type Role } from "@hr/shared";
+import { pageSizes, roles, searchText, slicePage, type Credential, type Employee, type Paged, type Role } from "@hr/shared";
 import { isEmail, normalizeEmail } from "../auth/password.js";
 import { SessionService } from "../auth/session.service.js";
 import { AuditService } from "../common/audit.service.js";
@@ -13,12 +13,13 @@ import type { CreateUserDto, ProfileDto } from "./dto.js";
 
 const DUPLICATE = "Já existe uma conta com esse e-mail.";
 
-function readProfile(input: ProfileDto) {
+/** `departments` são os setores que podem ser escolhidos agora. */
+function readProfile(input: ProfileDto, departments: string[]) {
   const name = input.name.trim().replace(/\s+/g, " ");
   const role: Role = roles.includes(input.role as Role) ? (input.role as Role) : "colaborador";
   const fields: Record<string, string> = {};
   if (name.length < 3 || name.length > 100) fields.name = "Informe o nome completo.";
-  if (!sectors.includes(input.department)) fields.department = "Selecione o setor.";
+  if (!departments.includes(input.department)) fields.department = "Selecione o setor.";
   return { profile: { name, department: input.department, role }, fields };
 }
 
@@ -31,24 +32,41 @@ export class UsersService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(): Promise<Employee[]> {
+  /** Setores ativos e, na edição, o que a conta já tem, mesmo desativado. */
+  private async departments(current?: string) {
+    const rows = await this.prisma.department.findMany({ where: { active: true }, select: { name: true } });
+    return [...rows.map((r) => r.name), ...(current ? [current] : [])];
+  }
+
+  async list(query: { q: string; role: string; status: string; page: string }): Promise<Paged<Employee>> {
     const [users, blocked] = await Promise.all([
       this.prisma.user.findMany({ orderBy: [{ active: "desc" }, { name: "asc" }] }),
       this.throttle.blockedLogins(),
     ]);
     const now = new Date();
     // o hash da senha nunca sai da API: apenas os campos abaixo
-    return users.map((u) => ({
+    const employees: Employee[] = users.map((u) => ({
       id: u.id, name: u.name, email: u.email, department: u.department, role: u.role, active: u.active,
       pending: u.mustChangePassword,
       expired: Boolean(u.mustChangePassword && u.tempExpiresAt && u.tempExpiresAt < now),
       locked: blocked.has(u.email),
       lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
     }));
+    const wanted = searchText(query.q);
+    const statuses: Record<string, (e: Employee) => boolean> = {
+      ativas: (e) => e.active,
+      desativadas: (e) => !e.active,
+      pendentes: (e) => e.active && e.pending,
+      bloqueadas: (e) => e.locked,
+    };
+    const status = Object.hasOwn(statuses, query.status) ? statuses[query.status] : () => true;
+    // são as contas da empresa: filtrar aqui permite buscar sem acento e pelo bloqueio de login
+    const found = employees.filter((e) => (!query.role || e.role === query.role) && status(e) && searchText(`${e.name} ${e.email} ${e.department}`).includes(wanted));
+    return slicePage(found, query.page, pageSizes.usuarios);
   }
 
   async create(auth: AuthContext, input: CreateUserDto, client: ClientInfo): Promise<Credential> {
-    const { profile, fields } = readProfile(input);
+    const { profile, fields } = readProfile(input, await this.departments());
     const email = normalizeEmail(input.email);
     if (!isEmail(email)) fields.email = "E-mail inválido.";
     else if (await this.prisma.user.findUnique({ where: { email } })) fields.email = DUPLICATE;
@@ -84,7 +102,8 @@ export class UsersService {
   }
 
   async update(auth: AuthContext, id: number, input: ProfileDto, client: ClientInfo) {
-    const { profile, fields } = readProfile(input);
+    const current = await this.prisma.user.findUnique({ where: { id }, select: { department: true } });
+    const { profile, fields } = readProfile(input, await this.departments(current?.department));
     if (Object.keys(fields).length) throw fail(422, "Revise os campos.", { fields });
     const { target } = await this.change(auth, id, (tx) => tx.user.update({ where: { id }, data: profile }));
     await this.audit.log(auth.user.email, "usuario_editado", client.ip, target.email);

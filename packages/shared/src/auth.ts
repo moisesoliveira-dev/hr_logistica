@@ -1,4 +1,6 @@
 /* Contratos e constantes do portal, usados pelo site e pela API. */
+import type { StageRef } from "./cargo.js";
+
 export type Role = "admin" | "marketing" | "operacao" | "colaborador";
 
 export const roleLabels: Record<Role, string> = { admin: "Administrador", marketing: "Marketing", operacao: "Operação", colaborador: "Colaborador" };
@@ -8,8 +10,6 @@ export const canEditContent = (role: Role) => role === "admin" || role === "mark
 
 /** Quem cadastra e atualiza as cargas. */
 export const canManageCargo = (role: Role) => role === "admin" || role === "operacao";
-
-export const sectors = ["Administrativo", "Comercial", "Operações", "Armazém", "Frota", "Financeiro", "Recursos Humanos", "TI", "Diretoria"];
 
 export const MIN_PASSWORD = 10;
 export const TEMP_PASSWORD_HOURS = 72;
@@ -40,6 +40,9 @@ export const eventLabels: Record<string, string> = {
   carga_atualizada: "Registrou andamento de carga",
   carga_etapa_removida: "Removeu etapa de uma carga",
   carga_removida: "Excluiu uma carga",
+  cadastro_criado: "Criou um cadastro",
+  cadastro_editado: "Editou um cadastro",
+  cadastro_removido: "Excluiu um cadastro",
 };
 
 /** Dados do usuário que podem sair da API (nunca o hash da senha). */
@@ -68,9 +71,35 @@ export type Credential = { email: string; password: string };
 
 export type AuditEntry = { id: number; at: string; actor: string; event: string; detail: string; ip: string };
 
+export type DayCount = { /** AAAA-MM-DD no horário de Manaus */ day: string; count: number };
+
+export type CargoOverview = {
+  open: number;
+  occurrences: number;
+  late: number;
+  deliveredWeek: number;
+  /** quantas cargas há em cada etapa agora */
+  stages: { stage: StageRef; count: number }[];
+  /** entregas por dia nos últimos 14 dias */
+  deliveries: DayCount[];
+  /** com ocorrência ou atrasadas */
+  attention: { id: number; code: string; customerName: string; stage: StageRef; expectedAt: string; late: boolean }[];
+};
+
+export type ContentOverview = {
+  published: number;
+  drafts: number;
+  images: number;
+  siteItems: number;
+  latest: { id: number; title: string; status: PostStatus; updatedAt: string }[];
+};
+
 export type Dashboard = {
   recent: AuditEntry[];
-  stats: { activeUsers: number; logins24h: number; failures24h: number } | null;
+  /** cada bloco vem nulo para quem não tem acesso àquela área */
+  stats: { activeUsers: number; failures24h: number; logins: DayCount[] } | null;
+  cargo: CargoOverview | null;
+  content: ContentOverview | null;
 };
 
 export type ApiErrorBody = { message: string; fields?: Record<string, string> };
@@ -82,6 +111,9 @@ export type PostStatus = "rascunho" | "publicado";
 export type PostInput = { title: string; excerpt: string; body: string; coverId: string | null; status: PostStatus };
 
 export type PostItem = PostInput & { id: number; slug: string; publishedAt: string | null; updatedAt: string; updatedBy: string };
+
+/** Nas listas o texto da notícia não vai junto. */
+export type PostSummary = Omit<PostItem, "body">;
 
 export type MediaItem = { id: string; filename: string; mimeType: string; size: number; alt: string; uploadedBy: string; createdAt: string };
 

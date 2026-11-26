@@ -10,8 +10,9 @@ export class CargoController {
   constructor(private readonly service: CargoService) {}
 
   @Get()
-  list(@Query("q") query: unknown, @Query("stage") stage: unknown) {
-    return this.service.list(typeof query === "string" ? query : "", typeof stage === "string" ? stage : "");
+  list(@Query("q") query: unknown, @Query("stage") stage: unknown, @Query("mode") mode: unknown, @Query("page") page: unknown) {
+    const text = (value: unknown) => (typeof value === "string" ? value : "");
+    return this.service.list(text(query), text(stage), text(mode), text(page));
   }
 
   @Get(":id")

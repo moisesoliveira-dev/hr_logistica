@@ -1,25 +1,26 @@
 /* Acompanhamento de cargas: etapas, modais e regras usadas pelo site e pela API. */
 import { isValidCnpj } from "./forms.js";
+import type { Paged } from "./paging.js";
 
-export const cargoStages = {
-  aguardando_coleta: "Aguardando coleta",
-  coletada: "Carga coletada",
-  no_terminal: "No terminal de origem",
-  em_transito: "Em trânsito",
-  centro_distribuicao: "No centro de distribuição de destino",
-  saiu_entrega: "Saiu para entrega",
-  entregue: "Entregue",
-  ocorrencia: "Ocorrência",
-} as const;
+/*
+ * Etapas e tipos de transporte são cadastros. O que o sistema precisa saber de cada etapa é o TIPO:
+ * onde a carga começa, o caminho até lá, quando está entregue e o que é problema.
+ */
+export type StageKind = "inicio" | "andamento" | "entrega" | "ocorrencia";
 
-export type CargoStage = keyof typeof cargoStages;
-export const cargoStageKeys = Object.keys(cargoStages) as CargoStage[];
-/** Caminho normal da carga. "Ocorrência" pode acontecer em qualquer ponto. */
-export const cargoRoute: CargoStage[] = cargoStageKeys.filter((s) => s !== "ocorrencia");
+export const stageKindLabels: Record<StageKind, string> = { inicio: "Início", andamento: "Em andamento", entrega: "Entrega", ocorrencia: "Ocorrência" };
 
-export const cargoModes = { rodoviario: "Rodoviário", rodo_fluvial: "Rodo-fluvial", cabotagem: "Cabotagem", multimodal: "Multimodal" } as const;
-export type CargoMode = keyof typeof cargoModes;
-export const cargoModeKeys = Object.keys(cargoModes) as CargoMode[];
+/** As etapas de início e de entrega são do sistema: podem mudar de nome, mas não podem sair. */
+export const START_STAGE = "aguardando_coleta";
+export const DONE_STAGE = "entregue";
+
+export type StageRef = { key: string; name: string; kind: StageKind };
+export type StageOption = StageRef & { active: boolean };
+export type ModeRef = { key: string; name: string };
+export type ModeOption = ModeRef & { active: boolean };
+
+/** Já vêm na ordem certa: início, andamento, entrega e, por último, ocorrências. */
+export type CargoOptions = { stages: StageOption[]; modes: ModeOption[] };
 
 export type CargoInput = {
   invoice: string;
@@ -27,13 +28,13 @@ export type CargoInput = {
   customerDocument: string;
   origin: string;
   destination: string;
-  mode: CargoMode;
+  mode: string;
   /** AAAA-MM-DD ou vazio */
   expectedAt: string;
 };
 
 export type CargoEventInput = {
-  stage: CargoStage;
+  stage: string;
   location: string;
   /** o cliente vê este texto */
   note: string;
@@ -41,20 +42,22 @@ export type CargoEventInput = {
   at: string;
 };
 
-export type CargoEvent = { id: number; stage: CargoStage; location: string; note: string; at: string; createdBy: string };
+export type CargoEvent = { id: number; stage: StageRef; location: string; note: string; at: string; createdBy: string };
 
 export type CargoSummary = {
   id: number; code: string; invoice: string; customerName: string; origin: string; destination: string;
-  stage: CargoStage; expectedAt: string; updatedAt: string;
+  stage: StageRef; expectedAt: string; updatedAt: string;
 };
 
-export type CargoDetail = CargoSummary & { customerDocument: string; mode: CargoMode; events: CargoEvent[] };
+export type CargoDetail = CargoSummary & { customerDocument: string; mode: ModeRef; events: CargoEvent[] };
 
-export type CargoList = { items: CargoSummary[]; total: number };
+export type CargoList = Paged<CargoSummary>;
 
 /** O que o cliente enxerga: sem nome, documento ou e-mail de ninguém. */
 export type PublicCargo = {
-  code: string; invoice: string; origin: string; destination: string; mode: CargoMode; stage: CargoStage; expectedAt: string;
+  code: string; invoice: string; origin: string; destination: string; mode: string; stage: StageRef; expectedAt: string;
+  /** o caminho normal, do início à entrega, para a barra de progresso */
+  route: string[];
   events: Omit<CargoEvent, "createdBy">[];
 };
 

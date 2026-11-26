@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Put, Res, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Put, Query, Res, UploadedFile, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
 import { Auth, Client, Public, Roles, type AuthContext, type ClientInfo } from "../common/decorators.js";
@@ -7,6 +7,8 @@ import { ContentService, MAX_IMAGE_BYTES } from "./content.service.js";
 import { AltDto, MoveDto, PostDto, SettingsDto, SiteItemDto } from "./dto.js";
 import { SettingsService } from "./settings.service.js";
 import { SiteService } from "./site.service.js";
+
+const text = (value: unknown) => (typeof value === "string" ? value.slice(0, 100) : "");
 
 function sendImage(response: Response, media: { data: Uint8Array; mimeType: string } | null, cache: string) {
   if (!media) throw fail(404, "Imagem não encontrada.");
@@ -21,8 +23,8 @@ export class ContentController {
   constructor(private readonly service: ContentService) {}
 
   @Get("media")
-  media() {
-    return this.service.listMedia();
+  media(@Query("q") q: unknown, @Query("page") page: unknown) {
+    return this.service.listMedia(text(q), text(page));
   }
 
   @Post("media")
@@ -47,8 +49,8 @@ export class ContentController {
   }
 
   @Get("posts")
-  posts() {
-    return this.service.listPosts();
+  posts(@Query("q") q: unknown, @Query("status") status: unknown, @Query("page") page: unknown) {
+    return this.service.listPosts(text(q), text(status), text(page));
   }
 
   @Get("posts/:id")

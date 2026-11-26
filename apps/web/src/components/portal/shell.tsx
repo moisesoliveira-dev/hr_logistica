@@ -17,7 +17,7 @@ export function PortalShell({ user, children }: Props) {
   const menu = useRef<HTMLUListElement>(null);
   const items = [
     { href: "/portal", label: "Início" },
-    ...(canManageCargo(user.role) ? [{ href: "/portal/cargas", label: "Cargas" }] : []),
+    ...(canManageCargo(user.role) ? [{ href: "/portal/cargas", label: "Cargas" }, { href: "/portal/cadastros", label: "Cadastros" }] : []),
     ...(canEditContent(user.role)
       ? [
           { href: "/portal/conteudo/noticias", label: "Notícias" },

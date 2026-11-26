@@ -3,16 +3,19 @@
 import { motion } from "motion/react";
 import { Check, Copy, Trash2 } from "lucide-react";
 import { useActionState, useId, useState } from "react";
-import { cargoModeKeys, cargoModes, cargoStageKeys, cargoStages, formatDocument, type CargoDetail, type CargoEvent } from "@hr/shared";
+import { DONE_STAGE, formatDocument, type CargoDetail, type CargoEvent, type CargoOptions } from "@hr/shared";
 import { addCargoEvent, deleteCargo, removeCargoEvent, saveCargo } from "@/lib/auth/cargo-actions";
 import { formatDate, type FormState } from "@/lib/auth/shared";
 import { Notice, SubmitButton, TextField } from "../auth/fields";
 import { useConfirmSubmit } from "../confirm";
+import { Combobox } from "./combobox";
 
 const empty: FormState = {};
 const card = "panel bg-white p-5 sm:p-6";
 
-function Select({ label, name, defaultValue, options }: { label: string; name: string; defaultValue: string; options: [string, string][] }) {
+const placeHelp = "Nenhum local ou cidade com esse nome. Será salvo como você digitou.";
+
+function Select({ label, name, defaultValue, options, error }: { label: string; name: string; defaultValue: string; options: [string, string][]; error?: string }) {
   const id = useId();
   return (
     <div className="relative">
@@ -20,7 +23,19 @@ function Select({ label, name, defaultValue, options }: { label: string; name: s
         {options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
       </select>
       <label htmlFor={id} className="field-label">{label}</label>
+      {error && <p className="pl-2 pt-1.5 text-sm font-bold text-red-600">{error}</p>}
     </div>
+  );
+}
+
+/** Escolher um cliente já cadastrado preenche o CNPJ/CPF sozinho. */
+function CustomerFields({ name, document, fields }: { name: string; document: string; fields?: Record<string, string> }) {
+  const [number, setNumber] = useState(document);
+  return (
+    <>
+      <Combobox label="Cliente (nome ou CNPJ/CPF)" name="customerName" source="clientes" required maxLength={150} defaultValue={name} error={fields?.customerName} emptyText="Cliente novo: ele entra no cadastro quando a carga for salva." onPick={(s) => setNumber(s.extra ?? "")} />
+      <TextField label="CNPJ ou CPF do cliente" name="customerDocument" required maxLength={20} value={number} onChange={(e) => setNumber(e.target.value)} error={fields?.customerDocument} />
+    </>
   );
 }
 
@@ -31,22 +46,23 @@ function useFormVersion(state: FormState) {
   return seen.version;
 }
 
-export function CargoForm({ cargo }: { cargo?: CargoDetail }) {
+export function CargoForm({ cargo, options }: { cargo?: CargoDetail; options: CargoOptions }) {
   const [state, action] = useActionState(saveCargo, empty);
   const version = useFormVersion(state);
   const v = state.values;
   const value = (key: "invoice" | "customerName" | "origin" | "destination" | "expectedAt") => v?.[key] ?? cargo?.[key] ?? "";
+  // transporte desativado só aparece na carga que já o usa
+  const modes = options.modes.filter((m) => m.active || m.key === cargo?.mode.key);
   return (
     <form action={action} className={`${card} space-y-4`}>
       <h2 className="display text-2xl">Dados da carga</h2>
       <Notice error={state.error} success={state.success} stamp={state.stamp} />
       {cargo && <input type="hidden" name="id" value={cargo.id} />}
       <div key={version} className="grid gap-4 sm:grid-cols-2">
-        <TextField label="Cliente" name="customerName" required maxLength={150} defaultValue={value("customerName")} error={state.fields?.customerName} />
-        <TextField label="CNPJ ou CPF do cliente" name="customerDocument" required maxLength={20} defaultValue={v?.customerDocument ?? (cargo ? formatDocument(cargo.customerDocument) : "")} error={state.fields?.customerDocument} />
-        <TextField label="Origem" name="origin" required maxLength={120} defaultValue={value("origin")} error={state.fields?.origin} />
-        <TextField label="Destino" name="destination" required maxLength={120} defaultValue={value("destination")} error={state.fields?.destination} />
-        <Select label="Transporte" name="mode" defaultValue={v?.mode ?? cargo?.mode ?? "rodo_fluvial"} options={cargoModeKeys.map((k) => [k, cargoModes[k]])} />
+        <CustomerFields name={value("customerName")} document={v?.customerDocument ?? (cargo ? formatDocument(cargo.customerDocument) : "")} fields={state.fields} />
+        <Combobox label="Origem" name="origin" source="lugares" required maxLength={120} defaultValue={value("origin")} error={state.fields?.origin} emptyText={placeHelp} />
+        <Combobox label="Destino" name="destination" source="lugares" required maxLength={120} defaultValue={value("destination")} error={state.fields?.destination} emptyText={placeHelp} />
+        <Select label="Transporte" name="mode" defaultValue={v?.mode ?? cargo?.mode.key ?? modes[0]?.key ?? ""} options={modes.map((m) => [m.key, m.name])} error={state.fields?.mode} />
         <TextField label="Previsão de entrega (opcional)" name="expectedAt" type="date" defaultValue={value("expectedAt")} error={state.fields?.expectedAt} />
         <TextField label="Nota fiscal (opcional)" name="invoice" maxLength={60} defaultValue={value("invoice")} error={state.fields?.invoice} />
       </div>
@@ -55,13 +71,16 @@ export function CargoForm({ cargo }: { cargo?: CargoDetail }) {
   );
 }
 
-export function CargoEventForm({ cargo }: { cargo: CargoDetail }) {
+export function CargoEventForm({ cargo, options }: { cargo: CargoDetail; options: CargoOptions }) {
   const [state, action] = useActionState(addCargoEvent, empty);
   const version = useFormVersion(state);
   const noteId = useId();
   const v = state.values;
-  // sugere a próxima etapa do caminho normal
-  const next = cargoStageKeys[Math.min(cargoStageKeys.indexOf(cargo.stage) + 1, cargoStageKeys.indexOf("entregue"))];
+  const stages = options.stages.filter((s) => s.active);
+  // sugere a etapa seguinte à última do caminho normal (uma ocorrência não conta)
+  const path = options.stages.filter((s) => s.kind !== "ocorrencia");
+  const reached = cargo.events.find((e) => e.stage.kind !== "ocorrencia")?.stage.key;
+  const next = path.slice(path.findIndex((s) => s.key === reached) + 1).find((s) => s.active)?.key ?? DONE_STAGE;
   return (
     <form action={action} className={`${card} space-y-4 ring-2 ring-brand/30`}>
       <h2 className="display text-2xl">Registrar andamento</h2>
@@ -69,8 +88,8 @@ export function CargoEventForm({ cargo }: { cargo: CargoDetail }) {
       <input type="hidden" name="id" value={cargo.id} />
       <div key={version} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Select label="Etapa" name="stage" defaultValue={state.error ? v?.stage ?? next : next} options={cargoStageKeys.map((k) => [k, cargoStages[k]])} />
-          <TextField label="Local (cidade, terminal...)" name="location" required maxLength={120} defaultValue={state.error ? v?.location : ""} error={state.fields?.location} />
+          <Select label="Etapa" name="stage" defaultValue={state.error ? v?.stage ?? next : next} options={stages.map((s) => [s.key, s.kind === "ocorrencia" ? `⚠ ${s.name}` : s.name])} error={state.fields?.stage} />
+          <Combobox label="Local (cidade, terminal...)" name="location" source="lugares" required maxLength={120} defaultValue={state.error ? v?.location : ""} error={state.fields?.location} emptyText={placeHelp} />
           <TextField label="Quando (em branco = agora)" name="at" type="datetime-local" defaultValue={state.error ? v?.at : ""} error={state.fields?.at} />
         </div>
         <div>
@@ -98,7 +117,7 @@ export function CargoHistory({ cargoId, events }: { cargoId: number; events: Car
         {events.map((event) => (
           <motion.li layout key={event.id} className="flex items-start gap-3 py-4">
             <div className="min-w-0 flex-1">
-              <p className="font-bold">{cargoStages[event.stage]} · {event.location}</p>
+              <p className="font-bold">{event.stage.name} · {event.location}</p>
               <p className="text-sm text-ink/55">{formatDate(event.at)} · lançado por {event.createdBy}</p>
               {event.note && <p className="mt-1 whitespace-pre-line break-words text-sm">{event.note}</p>}
             </div>
@@ -106,7 +125,7 @@ export function CargoHistory({ cargoId, events }: { cargoId: number; events: Car
               <form action={action}>
                 <input type="hidden" name="id" value={cargoId} />
                 <input type="hidden" name="eventId" value={event.id} />
-                <button disabled={pending} onClick={confirmSubmit({ title: "Remover esta etapa?", message: `“${cargoStages[event.stage]}” em ${event.location} sai do histórico que o cliente vê. Use apenas para corrigir um lançamento errado.`, action: "Remover etapa" })} aria-label={`Remover etapa ${cargoStages[event.stage]}`} className="grid size-9 cursor-pointer place-items-center rounded-sm border border-red-300 text-red-700 hover:bg-red-600 hover:text-white"><Trash2 className="size-4" /></button>
+                <button disabled={pending} onClick={confirmSubmit({ title: "Remover esta etapa?", message: `“${event.stage.name}” em ${event.location} sai do histórico que o cliente vê. Use apenas para corrigir um lançamento errado.`, action: "Remover etapa" })} aria-label={`Remover etapa ${event.stage.name}`} className="grid size-9 cursor-pointer place-items-center rounded-sm border border-red-300 text-red-700 hover:bg-red-600 hover:text-white"><Trash2 className="size-4" /></button>
               </form>
             )}
           </motion.li>

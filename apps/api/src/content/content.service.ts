@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { sectionDef, type MediaItem, type PostInput, type PostItem } from "@hr/shared";
+import { pageSizes, sectionDef, searchText, slicePage, type MediaItem, type Paged, type PostInput, type PostItem, type PostSummary } from "@hr/shared";
 import { AuditService } from "../common/audit.service.js";
 import type { AuthContext, ClientInfo } from "../common/decorators.js";
 import { fail } from "../common/errors.js";
@@ -26,6 +26,13 @@ const toPost = (p: Post): PostItem => ({
   publishedAt: p.publishedAt?.toISOString() ?? null, updatedAt: p.updatedAt.toISOString(), updatedBy: p.updatedBy,
 });
 
+const postColumns = { id: true, slug: true, title: true, excerpt: true, coverId: true, status: true, publishedAt: true, updatedAt: true, updatedBy: true } as const;
+
+const toSummary = (p: Pick<Post, keyof typeof postColumns>): PostSummary => ({
+  id: p.id, slug: p.slug, title: p.title, excerpt: p.excerpt, coverId: p.coverId, status: p.status,
+  publishedAt: p.publishedAt?.toISOString() ?? null, updatedAt: p.updatedAt.toISOString(), updatedBy: p.updatedBy,
+});
+
 const slugify = (text: string) =>
   text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 120) || "noticia";
 
@@ -37,8 +44,11 @@ export class ContentService {
 
   /* ───────── imagens ───────── */
 
-  async listMedia() {
-    return (await this.prisma.media.findMany({ select: mediaColumns, orderBy: { createdAt: "desc" } })).map(toMedia);
+  /** Busca sem acento na descrição e no nome do arquivo. Os bytes das imagens não são lidos aqui. */
+  async listMedia(q: string, page: string): Promise<Paged<MediaItem>> {
+    const wanted = searchText(q);
+    const rows = await this.prisma.media.findMany({ select: mediaColumns, orderBy: [{ createdAt: "desc" }, { id: "asc" }] });
+    return slicePage(rows.filter((m) => searchText(`${m.alt} ${m.filename}`).includes(wanted)).map(toMedia), page, pageSizes.imagens);
   }
 
   async upload(auth: AuthContext, file: Express.Multer.File | undefined, alt: string, client: ClientInfo) {
@@ -75,8 +85,14 @@ export class ContentService {
 
   /* ───────── notícias ───────── */
 
-  async listPosts() {
-    return (await this.prisma.post.findMany({ orderBy: { updatedAt: "desc" } })).map(toPost);
+  async listPosts(q: string, status: string, page: string): Promise<Paged<PostSummary>> {
+    const wanted = searchText(q);
+    const rows = await this.prisma.post.findMany({
+      where: status === "publicado" || status === "rascunho" ? { status } : {},
+      select: postColumns,
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    });
+    return slicePage(rows.filter((p) => searchText(`${p.title} ${p.excerpt}`).includes(wanted)).map(toSummary), page, pageSizes.noticias);
   }
 
   async getPost(id: number) {
@@ -144,8 +160,9 @@ export class ContentService {
 
   /* ───────── site público ───────── */
 
+  /** Sem o texto: o site junta com as notícias antigas antes de buscar e paginar. */
   async publishedPosts() {
-    return (await this.prisma.post.findMany({ where: { status: "publicado" }, orderBy: { publishedAt: "desc" } })).map(toPost);
+    return (await this.prisma.post.findMany({ where: { status: "publicado" }, select: postColumns, orderBy: { publishedAt: "desc" } })).map(toSummary);
   }
 
   async publishedPost(slug: string) {

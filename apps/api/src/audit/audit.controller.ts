@@ -1,35 +1,34 @@
-import { Controller, Get } from "@nestjs/common";
-import type { AuditEntry, Dashboard } from "@hr/shared";
+import { Controller, Get, Query } from "@nestjs/common";
+import { eventLabels, pageSizes, pageWindow, type AuditEntry, type Dashboard, type Paged } from "@hr/shared";
 import { AdminOnly, Auth, type AuthContext } from "../common/decorators.js";
-import type { AuditLog } from "../generated/prisma/client.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { DashboardService, toEntry } from "./dashboard.service.js";
 
-const toEntry = (row: AuditLog): AuditEntry => ({ id: row.id, at: row.at.toISOString(), actor: row.actor, event: row.event, detail: row.detail, ip: row.ip });
 
 @Controller()
 export class AuditController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly service: DashboardService) {}
 
   @AdminOnly()
   @Get("audit")
-  async list() {
-    return (await this.prisma.auditLog.findMany({ orderBy: { id: "desc" }, take: 200 })).map(toEntry);
+  async list(@Query("q") query: unknown, @Query("event") event: unknown, @Query("page") requested: unknown): Promise<Paged<AuditEntry>> {
+    const q = typeof query === "string" ? query.trim().slice(0, 100) : "";
+    const contains = { contains: q, mode: "insensitive" as const };
+    // a busca vale para todo o histórico, não só para o que está na tela
+    const where = {
+      ...(typeof event === "string" && Object.hasOwn(eventLabels, event) ? { event } : {}),
+      ...(q ? { OR: [{ actor: contains }, { detail: contains }, { ip: contains }] } : {}),
+    };
+    const total = await this.prisma.auditLog.count({ where });
+    const pageSize = pageSizes.atividades;
+    const { page, skip } = pageWindow(total, requested, pageSize);
+    const rows = await this.prisma.auditLog.findMany({ where, orderBy: { id: "desc" }, skip, take: pageSize });
+    return { items: rows.map(toEntry), total, page, pageSize };
   }
 
-  /** Painel inicial: a atividade da própria pessoa e, para administradores, os números gerais. */
+  /** Painel inicial: a atividade da própria pessoa e os números das áreas que o perfil dela alcança. */
   @Get("dashboard")
-  async dashboard(@Auth() auth: AuthContext): Promise<Dashboard> {
-    const recent = await this.prisma.auditLog.findMany({ where: { actor: auth.user.email }, orderBy: { id: "desc" }, take: 5 });
-    let stats: Dashboard["stats"] = null;
-    if (auth.user.role === "admin") {
-      const since = new Date(Date.now() - 86_400_000);
-      const [activeUsers, logins24h, failures24h] = await Promise.all([
-        this.prisma.user.count({ where: { active: true } }),
-        this.prisma.auditLog.count({ where: { event: "login", at: { gt: since } } }),
-        this.prisma.auditLog.count({ where: { event: "login_falha", at: { gt: since } } }),
-      ]);
-      stats = { activeUsers, logins24h, failures24h };
-    }
-    return { recent: recent.map(toEntry), stats };
+  dashboard(@Auth() auth: AuthContext): Promise<Dashboard> {
+    return this.service.build(auth.user);
   }
 }

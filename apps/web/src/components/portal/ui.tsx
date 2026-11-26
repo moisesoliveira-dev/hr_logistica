@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 // cada área do portal tem uma foto da operação no cabeçalho
 const photos: [string, string][] = [
   ["/portal/cargas", "/fotos/frota-03.jpg"],
+  ["/portal/cadastros", "/fotos/armazem-02.jpg"],
   ["/portal/conteudo/noticias", "/fotos/sede-04.jpg"],
   ["/portal/conteudo/imagens", "/fotos/armazem-03.jpg"],
   ["/portal/conteudo/site", "/fotos/sede-02.jpg"],

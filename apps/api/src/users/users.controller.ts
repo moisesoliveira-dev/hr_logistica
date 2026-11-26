@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, ParseIntPipe, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, ParseIntPipe, Patch, Post, Query } from "@nestjs/common";
 import { AdminOnly, Auth, Client, type AuthContext, type ClientInfo } from "../common/decorators.js";
 import { CreateUserDto, ProfileDto, StatusDto } from "./dto.js";
 import { UsersService } from "./users.service.js";
@@ -9,8 +9,9 @@ export class UsersController {
   constructor(private readonly service: UsersService) {}
 
   @Get()
-  list() {
-    return this.service.list();
+  list(@Query("q") q: unknown, @Query("role") role: unknown, @Query("status") status: unknown, @Query("page") page: unknown) {
+    const text = (value: unknown) => (typeof value === "string" ? value.slice(0, 100) : "");
+    return this.service.list({ q: text(q), role: text(role), status: text(status), page: text(page) });
   }
 
   @Post()

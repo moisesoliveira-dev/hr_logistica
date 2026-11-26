@@ -1,10 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Check, ChevronDown, Copy, KeyRound, Search, UserPlus } from "lucide-react";
+import { Check, ChevronDown, Copy, KeyRound, UserPlus } from "lucide-react";
 import { useActionState, useState } from "react";
 import { createEmployee, manageEmployee } from "@/lib/auth/admin-actions";
-import { roleLabels, roles, sectors, type Employee } from "@hr/shared";
+import { roleLabels, roles, type Employee, type NamedItem } from "@hr/shared";
 import type { FormState } from "@/lib/auth/shared";
 import { Notice, SubmitButton, TextField } from "../auth/fields";
 import { useConfirmSubmit } from "../confirm";
@@ -45,10 +45,11 @@ function SelectField({ label, name, defaultValue, options, error }: { label: str
   );
 }
 
-const sectorOptions = sectors.map((s) => [s, s] as [string, string]);
+/** Setores ativos e, na edição, o setor atual da conta, mesmo que tenha sido desativado. */
+const sectorOptions = (sectors: NamedItem[], current?: string) => sectors.filter((s) => s.active || s.name === current).map((s) => [s.name, s.name] as [string, string]);
 const roleOptions: [string, string][] = roles.map((r) => [r, roleLabels[r]]);
 
-function NewEmployee() {
+function NewEmployee({ sectors }: { sectors: NamedItem[] }) {
   const [open, setOpen] = useState(false);
   const [state, action] = useActionState(createEmployee, empty);
   return (
@@ -67,7 +68,7 @@ function NewEmployee() {
               <div key={state.stamp ?? 0} className="grid gap-4 sm:grid-cols-2">
                 <TextField label="Nome completo" name="name" required maxLength={100} autoComplete="off" defaultValue={state.values?.name} error={state.fields?.name} />
                 <TextField label="E-mail corporativo" name="email" type="email" required autoComplete="off" defaultValue={state.values?.email} error={state.fields?.email} />
-                <SelectField label="Setor" name="department" defaultValue={state.values?.department ?? ""} options={sectorOptions} error={state.fields?.department} />
+                <SelectField label="Setor" name="department" defaultValue={state.values?.department ?? ""} options={sectorOptions(sectors)} error={state.fields?.department} />
                 <SelectField label="Perfil de acesso" name="role" defaultValue={state.values?.role ?? "colaborador"} options={roleOptions} />
               </div>
               <SubmitButton>Criar conta</SubmitButton>
@@ -83,7 +84,7 @@ function Badge({ children, tone }: { children: string; tone: string }) {
   return <span className={`rounded-sm px-2.5 py-0.5 text-xs font-extrabold ${tone}`}>{children}</span>;
 }
 
-function EmployeeRow({ employee, self }: { employee: Row; self: boolean }) {
+function EmployeeRow({ employee, self, sectors }: { employee: Row; self: boolean; sectors: NamedItem[] }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(manageEmployee, empty);
   const confirmSubmit = useConfirmSubmit();
@@ -118,7 +119,7 @@ function EmployeeRow({ employee, self }: { employee: Row; self: boolean }) {
               {state.credential && <Credential key={state.credential.password} credential={state.credential} />}
               <div key={`${employee.name}|${employee.department}|${employee.role}|${state.stamp ?? 0}`} className="grid gap-4 sm:grid-cols-3">
                 <TextField label="Nome completo" name="name" required maxLength={100} defaultValue={employee.name} error={state.fields?.name} />
-                <SelectField label="Setor" name="department" defaultValue={employee.department} options={sectorOptions} error={state.fields?.department} />
+                <SelectField label="Setor" name="department" defaultValue={employee.department} options={sectorOptions(sectors, employee.department)} error={state.fields?.department} />
                 <SelectField label="Perfil de acesso" name="role" defaultValue={employee.role} options={roleOptions} />
               </div>
               <div className="flex flex-wrap gap-2">
@@ -138,21 +139,15 @@ function EmployeeRow({ employee, self }: { employee: Row; self: boolean }) {
   );
 }
 
-export function UserAdmin({ employees, selfId }: { employees: Row[]; selfId: number }) {
-  const [query, setQuery] = useState("");
-  const plain = (text: string) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-  const filtered = employees.filter((e) => plain(`${e.name} ${e.email} ${e.department}`).includes(plain(query.trim())));
+export function UserAdmin({ employees, selfId, sectors, filters }: { employees: Row[]; selfId: number; sectors: NamedItem[]; filters: React.ReactNode }) {
   return (
     <div className="space-y-5">
-      <NewEmployee />
-      <label className="relative block">
-        <Search className="absolute left-5 top-1/2 size-5 -translate-y-1/2 text-ink/40" aria-hidden />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} type="search" placeholder="Buscar por nome, e-mail ou setor" aria-label="Buscar funcionário" className="w-full rounded-sm border border-ink/15 bg-white py-3.5 pl-13 pr-5 outline-none focus:border-brand" />
-      </label>
+      <NewEmployee sectors={sectors} />
+      {filters}
       <ul className="space-y-3">
-        {filtered.map((e) => <EmployeeRow key={e.id} employee={e} self={e.id === selfId} />)}
+        {employees.map((e) => <EmployeeRow key={e.id} employee={e} self={e.id === selfId} sectors={sectors} />)}
       </ul>
-      {!filtered.length && <p className="text-center text-ink/55">Nenhum funcionário encontrado.</p>}
+      {!employees.length && <p className="text-center text-ink/55">Nenhum funcionário encontrado.</p>}
     </div>
   );
 }

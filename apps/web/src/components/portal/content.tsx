@@ -8,6 +8,7 @@ import { manageImage, savePost, uploadImage } from "@/lib/auth/content-actions";
 import type { FormState } from "@/lib/auth/shared";
 import { Notice, SubmitButton, TextField } from "../auth/fields";
 import { useConfirmSubmit } from "../confirm";
+import { MediaGallery } from "./media-gallery";
 
 const empty: FormState = {};
 const src = (id: string) => `/portal/midia/${id}`;
@@ -61,8 +62,8 @@ function ImageCard({ item }: { item: MediaItem }) {
   );
 }
 
-export function ImageLibrary({ items }: { items: MediaItem[] }) {
-  if (!items.length) return <p className="text-center text-ink/55">Nenhuma imagem enviada ainda.</p>;
+export function ImageLibrary({ items, emptyText }: { items: MediaItem[]; emptyText: string }) {
+  if (!items.length) return <p className="text-center text-ink/55">{emptyText}</p>;
   return (
     <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((item) => <ImageCard key={item.id} item={item} />)}
@@ -73,7 +74,6 @@ export function ImageLibrary({ items }: { items: MediaItem[] }) {
 /* ───────── notícias ───────── */
 
 type PickerProps = {
-  media: MediaItem[];
   /** imagem do acervo já escolhida */
   value: string;
   name?: string;
@@ -88,7 +88,7 @@ type PickerProps = {
   error?: string;
 };
 
-export function ImagePicker({ media, value, name = "coverId", label = "Imagem de capa", choose = "Escolher capa", change = "Trocar capa", clear = "Sem capa", fallback, removable = true, error }: PickerProps) {
+export function ImagePicker({ value, name = "coverId", label = "Imagem de capa", choose = "Escolher capa", change = "Trocar capa", clear = "Sem capa", fallback, removable = true, error }: PickerProps) {
   const [selected, setSelected] = useState(value);
   const [removed, setRemoved] = useState(false);
   const [open, setOpen] = useState(false);
@@ -109,18 +109,12 @@ export function ImagePicker({ media, value, name = "coverId", label = "Imagem de
         </button>
         {removable && preview && <button type="button" onClick={() => { setSelected(""); setRemoved(true); }} className="cursor-pointer text-sm font-bold text-red-700 underline">{clear}</button>}
       </div>
+      {/* o acervo só é consultado quando o seletor é aberto */}
       <AnimatePresence>
         {open && (
-          <motion.ul className="mt-3 grid max-h-72 grid-cols-3 gap-2 overflow-y-auto rounded-sm bg-paper p-2 sm:grid-cols-4" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-            {media.length === 0 && <li className="col-span-full p-4 text-center text-sm text-ink/55">Envie imagens na página Imagens.</li>}
-            {media.map((m) => (
-              <li key={m.id}>
-                <button type="button" onClick={() => { setSelected(m.id); setRemoved(false); setOpen(false); }} aria-label={`Usar ${m.alt || m.filename}`} className={`block w-full cursor-pointer overflow-hidden rounded-sm ${m.id === selected ? "ring-4 ring-brand" : "hover:opacity-80"}`}>
-                  <img src={src(m.id)} alt="" loading="lazy" className="aspect-video w-full object-cover" /> {/* eslint-disable-line @next/next/no-img-element */}
-                </button>
-              </li>
-            ))}
-          </motion.ul>
+          <motion.div className="overflow-hidden" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+            <MediaGallery selected={selected} onPick={(id) => { setSelected(id); setRemoved(false); setOpen(false); }} />
+          </motion.div>
         )}
       </AnimatePresence>
       {error && <p className="pl-2 pt-1.5 text-sm font-bold text-red-600">{error}</p>}
@@ -153,7 +147,7 @@ function Preview({ draft, onClose }: { draft: { title: string; excerpt: string; 
   );
 }
 
-export function PostEditor({ post, media, saved }: { post?: PostItem; media: MediaItem[]; saved?: boolean }) {
+export function PostEditor({ post, saved }: { post?: PostItem; saved?: boolean }) {
   const [state, action, pending] = useActionState(savePost, saved ? { success: "Salvo.", stamp: 1 } : empty);
   const v = state.values;
   const form = useRef<HTMLFormElement>(null);
@@ -187,7 +181,7 @@ export function PostEditor({ post, media, saved }: { post?: PostItem; media: Med
           <p className="pl-2 pt-1.5 text-xs text-ink/55">Deixe uma linha em branco para separar os parágrafos.</p>
           {state.fields?.body && <p className="pl-2 text-sm font-bold text-red-600">{state.fields.body}</p>}
         </div>
-        <ImagePicker media={media} value={v?.coverId ?? post?.coverId ?? ""} />
+        <ImagePicker value={v?.coverId ?? post?.coverId ?? ""} />
       </div>
       <div className="flex flex-wrap gap-3 pt-2">
         <button name="intent" value="publicar" disabled={pending} className="cursor-pointer rounded-sm bg-brand px-7 py-3.5 font-extrabold text-white transition hover:bg-night disabled:opacity-60">

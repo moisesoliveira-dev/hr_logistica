@@ -181,22 +181,68 @@ model SiteSettings {
   @@map("site_settings")
 }
 
-enum CargoStage {
-  aguardando_coleta
-  coletada
-  no_terminal
-  em_transito
-  centro_distribuicao
-  saiu_entrega
-  entregue
+enum StageKind {
+  inicio
+  andamento
+  entrega
   ocorrencia
 }
 
-enum CargoMode {
-  rodoviario
-  rodo_fluvial
-  cabotagem
-  multimodal
+// Etapas do acompanhamento (cadastro). A chave não muda; o nome pode mudar.
+model Stage {
+  key      String    @id @db.VarChar(40)
+  name     String    @db.VarChar(60)
+  kind     StageKind
+  position Int
+  active   Boolean   @default(true)
+
+  shipments Shipment[]
+  events    ShipmentEvent[]
+
+  @@map("cargo_stages")
+}
+
+model TransportMode {
+  key    String  @id @db.VarChar(40)
+  name   String  @db.VarChar(60)
+  active Boolean @default(true)
+
+  shipments Shipment[]
+
+  @@map("transport_modes")
+}
+
+// Setores das contas. O usuário guarda o nome; renomear atualiza as contas.
+model Department {
+  id     Int     @id @default(autoincrement())
+  name   String  @unique @db.VarChar(60)
+  active Boolean @default(true)
+
+  @@map("departments")
+}
+
+// Clientes das cargas. A carga guarda uma cópia, então editar aqui não muda o passado.
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(150)
+  document  String   @unique @db.VarChar(14)
+  // nome sem acento e em minúsculas, para a busca
+  search    String   @db.VarChar(150)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("customers")
+}
+
+// Portos, terminais, armazéns e filiais
+model Place {
+  id     Int    @id @default(autoincrement())
+  name   String @db.VarChar(80)
+  // "Manaus – AM"
+  city   String @db.VarChar(60)
+  search String @db.VarChar(150)
+
+  @@unique([name, city])
+  @@map("places")
 }
 
 // Cargas acompanhadas pelo cliente no site
@@ -209,15 +255,19 @@ model Shipment {
   customerDocument String     @map("customer_document") @db.VarChar(14)
   origin           String     @db.VarChar(120)
   destination      String     @db.VarChar(120)
-  mode             CargoMode
+  mode             String     @db.VarChar(40)
   expectedAt       DateTime?  @map("expected_at") @db.Date
   // cópia da etapa do evento mais recente, para a lista e o filtro
-  stage            CargoStage
+  stage            String     @db.VarChar(40)
+  // código, nota, cliente, origem e destino sem acento, para a busca
+  search           String     @default("") @db.VarChar(500)
   createdBy        String     @map("created_by")
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  events ShipmentEvent[]
+  events    ShipmentEvent[]
+  stageInfo Stage           @relation(fields: [stage], references: [key], onDelete: Restrict)
+  modeInfo  TransportMode   @relation(fields: [mode], references: [key], onDelete: Restrict)
 
   @@index([stage, updatedAt])
   @@index([customerDocument])
@@ -227,13 +277,14 @@ model Shipment {
 model ShipmentEvent {
   id         Int        @id @default(autoincrement())
   shipmentId Int        @map("shipment_id")
-  stage      CargoStage
+  stage      String     @db.VarChar(40)
   location   String     @db.VarChar(120)
   note       String     @default("") @db.VarChar(500)
   at         DateTime   @db.Timestamptz(3)
   createdBy  String     @map("created_by")
 
-  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipment  Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  stageInfo Stage    @relation(fields: [stage], references: [key], onDelete: Restrict)
 
   @@index([shipmentId, at])
   @@map("shipment_events")

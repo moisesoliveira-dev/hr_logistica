@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { isSiteSection, sectionDef, type MediaItem, type SiteItem } from "@hr/shared";
+import { isSiteSection, sectionDef, type SiteItem } from "@hr/shared";
 import { SectionManager } from "@/components/portal/site-content";
 import { PageTitle } from "@/components/portal/ui";
 import { apiData, requireContentEditor } from "@/lib/auth/session";
@@ -18,7 +18,7 @@ export default async function SectionPage({ params }: Props) {
   await requireContentEditor();
   const { section } = await params;
   if (!isSiteSection(section)) notFound();
-  const [items, media] = await Promise.all([apiData<SiteItem[]>(`/content/site/${section}`), apiData<MediaItem[]>("/content/media")]);
+  const items = await apiData<SiteItem[]>(`/content/site/${section}`);
   const def = sectionDef(section);
   return (
     <>
@@ -27,7 +27,7 @@ export default async function SectionPage({ params }: Props) {
         <Link href="/portal/conteudo/site" className="inline-flex items-center gap-1 hover:text-brand"><ArrowLeft className="size-4" aria-hidden /> Todas as partes</Link>
         <a href={def.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-deep hover:text-night"><ExternalLink className="size-4" aria-hidden /> Ver no site</a>
       </p>
-      <SectionManager key={section} section={section} items={items} media={media} />
+      <SectionManager key={section} section={section} items={items} />
     </>
   );
 }

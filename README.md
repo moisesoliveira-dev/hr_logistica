@@ -5,7 +5,7 @@ Site institucional e Portal do Colaborador. Fonte: Barlow (Google Fonts).
 ```text
 apps/web         Next.js 16 (site + telas do portal). Não acessa o banco.
 apps/api         NestJS 12 + Prisma 7. Login, usuários, auditoria e formulários.
-packages/shared  Tipos e regras usados pelos dois (campos dos formulários, setores, etc.).
+packages/shared  Tipos e regras usados pelos dois (campos dos formulários, cadastros, etc.).
 PostgreSQL 17    Banco de dados, em container.
 ```
 
@@ -58,7 +58,7 @@ A primeira montagem das imagens pode levar bastante tempo (a instalação de pac
 | Perfil | O que faz no portal |
 | --- | --- |
 | Colaborador | atalhos, perfil e senha |
-| Operação | tudo do colaborador, mais **Cargas** (não vê o conteúdo do site) |
+| Operação | tudo do colaborador, mais **Cargas** e os cadastros de **Clientes** e **Locais** (não vê o conteúdo do site) |
 | Marketing | tudo do colaborador, mais **Notícias**, **Imagens**, **Partes do site** e **Contatos e redes** |
 | Administrador | tudo do Marketing e da Operação, mais **Usuários** e **Atividades** |
 
@@ -93,8 +93,32 @@ As demais fotos das páginas (capas e blocos de texto) são fixas.
 A resposta pública não traz o nome do cliente nem dados da equipe. Após 20 consultas sem sucesso do mesmo IP em 15 min,
 as consultas desse IP são bloqueadas. O CNPJ/CPF não aparece no endereço da página.
 
+## Cadastros e buscas
+
+| Cadastro | Quem mantém | Observações |
+| --- | --- | --- |
+| Clientes | Operação e Administrador | o cliente de uma carga nova entra sozinho |
+| Locais | Operação e Administrador | portos, terminais e armazéns; a cidade é escolhida na lista do IBGE |
+| Etapas | Administrador | tipos: início, em andamento, entrega e ocorrência. Início e entrega só mudam de nome |
+| Tipos de transporte | Administrador | |
+| Setores | Administrador | renomear atualiza as contas |
+
+Item já usado não é excluído: é **desativado** e deixa de ser oferecido. Renomear uma etapa ou um transporte muda também
+o que aparece nas cargas antigas. Cargas guardam uma cópia do cliente e dos locais, que não muda com o cadastro.
+
+Origem, destino e local do andamento sugerem os locais cadastrados e os municípios do IBGE enquanto se digita; também é
+aceito texto livre. A lista de municípios fica em `apps/api/src/registry/cities.ts` (fonte:
+`https://servicodados.ibge.gov.br/api/v1/localidades/municipios`, baixada em 26/11/2026).
+
 As cargas **não** vêm do sistema antigo (AMS): precisam ser cadastradas aqui. A página mantém um link para o AMS,
 configurável em **Contatos e redes**.
+
+## Listas, busca e páginas
+
+Cargas, Clientes, Locais, Atividades, Usuários, Notícias, Imagens (e o seletor de imagem) e o HR NEWS têm busca e
+páginas. Os tamanhos ficam em `pageSizes`, em `packages/shared/src/paging.ts`. Na API, essas listas respondem
+`{ items, total, page, pageSize }` e aceitam `?q=` e `?page=`; no site, o endereço usa `?pagina=`. Uma lista nova que
+possa crescer deve seguir o mesmo formato e usar o componente `components/pagination.tsx`.
 
 ## API
 
@@ -108,7 +132,8 @@ Todas as rotas exigem a chave interna e, exceto as marcadas, uma sessão (`Autho
 | `GET /auth/session`, `POST /auth/logout`, `POST /auth/password/change` | sessão (até com senha provisória) |
 | `GET/DELETE /auth/sessions`, `GET /dashboard` | sessão |
 | `/users…`, `GET /audit` | administrador |
-| `/cargo…` | Operação e administrador |
+| `/cargo…`, `/options/cargo`, `/search…`, `/registry/clientes…`, `/registry/locais…` | Operação e administrador |
+| `/registry/etapas…`, `/registry/transportes…`, `/registry/setores…` | administrador |
 | `POST /public/tracking` | sem sessão (código + CNPJ/CPF, com limite de tentativas) |
 | `/content/media…`, `/content/posts…`, `/content/site…`, `/content/settings` | Marketing e administrador |
 | `GET /public/posts`, `/public/site`, `/public/settings`, `/public/media/:id` | sem sessão (só o que está publicado ou visível) |
@@ -150,7 +175,8 @@ mostra "0 vulnerabilities" mesmo com ela ausente.
 | Contatos, WhatsApp, redes sociais, unidades | no portal (Marketing) |
 | Textos, menu, serviços, notícias antigas | `apps/web/src/lib/content.ts` |
 | Regras de cada área editável | `siteSections` em `packages/shared/src/auth.ts` |
-| Campos dos formulários, setores | `packages/shared/src/` |
+| Etapas, transportes, setores, clientes e locais | no portal, em **Cadastros** |
+| Campos dos formulários | `packages/shared/src/` |
 | Cores e fontes | `apps/web/src/app/globals.css` |
 | Animações reutilizáveis | `apps/web/src/components/motion.tsx` |
 | Fotos e logos | `apps/web/public/` |

@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { ArrowDown, ArrowUp, EyeOff, Pencil, Plus, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import { sectionDef, type MediaItem, type SiteItem, type SiteSection } from "@hr/shared";
+import { sectionDef, type SiteItem, type SiteSection } from "@hr/shared";
 import { manageSiteItem, saveSiteItem } from "@/lib/auth/content-actions";
 import type { FormState } from "@/lib/auth/shared";
 import { Notice, SubmitButton, TextField } from "../auth/fields";
@@ -14,7 +14,7 @@ import { useConfirmSubmit } from "../confirm";
 const empty: FormState = {};
 const round = "grid size-10 cursor-pointer place-items-center rounded-sm border border-ink/15 transition hover:bg-night hover:text-white disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-current";
 
-function ItemForm({ section, media, item }: { section: SiteSection; media: MediaItem[]; item?: SiteItem }) {
+function ItemForm({ section, item }: { section: SiteSection; item?: SiteItem }) {
   const def = sectionDef(section);
   const [state, action] = useActionState(saveSiteItem, empty);
   // depois de adicionar, o formulário volta em branco; depois de um erro, mantém o que foi digitado
@@ -29,7 +29,7 @@ function ItemForm({ section, media, item }: { section: SiteSection; media: Media
       {item && <input type="hidden" name="id" value={item.id} />}
       <div key={sent.version} className="space-y-4">
         <div>
-          <ImagePicker media={media} value={initial("mediaId")} name="mediaId" label={def.image.label} choose="Escolher imagem" change="Trocar imagem" clear="Sem foto"
+          <ImagePicker value={initial("mediaId")} name="mediaId" label={def.image.label} choose="Escolher imagem" change="Trocar imagem" clear="Sem foto"
             fallback={item?.mediaId ? `/portal/midia/${item.mediaId}` : item?.staticSrc} removable={!def.image.required} error={state.fields?.mediaId} />
           <p className="mt-2 text-xs text-ink/55">{def.image.hint} A imagem não está na lista? <Link href="/portal/conteudo/imagens" className="font-bold text-brand-deep underline">Envie em Imagens</Link>.</p>
         </div>
@@ -53,7 +53,7 @@ function ItemForm({ section, media, item }: { section: SiteSection; media: Media
   );
 }
 
-function Row({ item, media, first, last, index }: { item: SiteItem; media: MediaItem[]; first: boolean; last: boolean; index: number }) {
+function Row({ item, first, last, index }: { item: SiteItem; first: boolean; last: boolean; index: number }) {
   const [state, action, pending] = useActionState(manageSiteItem, empty);
   const [editing, setEditing] = useState(false);
   const def = sectionDef(item.section);
@@ -85,7 +85,7 @@ function Row({ item, media, first, last, index }: { item: SiteItem; media: Media
       <AnimatePresence>
         {editing && (
           <motion.div className="overflow-hidden" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
-            <div className="mt-4 border-t border-ink/10 pt-5"><ItemForm section={item.section} media={media} item={item} /></div>
+            <div className="mt-4 border-t border-ink/10 pt-5"><ItemForm section={item.section} item={item} /></div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -93,7 +93,7 @@ function Row({ item, media, first, last, index }: { item: SiteItem; media: Media
   );
 }
 
-export function SectionManager({ section, items, media }: { section: SiteSection; items: SiteItem[]; media: MediaItem[] }) {
+export function SectionManager({ section, items }: { section: SiteSection; items: SiteItem[] }) {
   const def = sectionDef(section);
   const [adding, setAdding] = useState(false);
   const visible = items.filter((i) => i.visible).length;
@@ -108,13 +108,13 @@ export function SectionManager({ section, items, media }: { section: SiteSection
       <AnimatePresence>
         {adding && (
           <motion.div className="-mx-2 overflow-hidden px-2" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
-            <div className="mb-6 panel bg-white p-6 ring-2 ring-brand/30"><ItemForm section={section} media={media} /></div>
+            <div className="mb-6 panel bg-white p-6 ring-2 ring-brand/30"><ItemForm section={section} /></div>
           </motion.div>
         )}
       </AnimatePresence>
       {items.length === 0 && <p className="text-ink/55">Nada por aqui ainda. Enquanto estiver vazio, esta área não aparece no site.</p>}
       <ul className="space-y-3">
-        {items.map((item, i) => <Row key={item.id} item={item} index={i} media={media} first={i === 0} last={i === items.length - 1} />)}
+        {items.map((item, i) => <Row key={item.id} item={item} index={i} first={i === 0} last={i === items.length - 1} />)}
       </ul>
     </>
   );
